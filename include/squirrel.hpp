@@ -24,19 +24,22 @@
 //default print function, writes to stdout
 inline void _printfunc(HSQUIRRELVM v,const SQChar *s,...)
 {
-    va_list vl;
-    va_start(vl, s);
-    scvprintf(stdout, s, vl);
-    va_end(vl);
+	printf("[squirrel]: ");
+	va_list vl;
+	va_start(vl, s);
+	scvprintf(stdout, s, vl);
+	va_end(vl);
+	std::cout << std::endl;
 }
 
 //default error function, writes to stderr
 inline void _errorfunc(HSQUIRRELVM v,const SQChar *s,...)
 {
-    va_list vl;
-    va_start(vl, s);
-    scvprintf(stderr, s, vl);
-    va_end(vl);
+	printf("[squirrel]: ");
+	va_list vl;
+	va_start(vl, s);
+	scvprintf(stderr, s, vl);
+	va_end(vl);
 }
 
 //register all the libs
