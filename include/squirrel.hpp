@@ -68,11 +68,11 @@ namespace sq	{
 
 struct object	{
 	object( HSQUIRRELVM v, std::string n, object *parent ) : sqvm(v)	{
-		init(v, n, parent);
+		init(n, parent);
 	}
 
 	object( HSQUIRRELVM v, int idx, object *parent ) : sqvm(v)	{
-		init(v, idx, parent);
+		init(idx, parent);
 	}
 
 	~object()	{
@@ -87,7 +87,7 @@ struct object	{
 		return object(sqvm, idx, this);
 	}
 
-	void init( HSQUIRRELVM v, std::string n, object *parent ) {
+	void init( std::string n, object *parent ) {
 		getParent(&parent->obj);
 		sq_pushstring(sqvm, n.c_str(), -1);
 		sq_get(sqvm, -2);
@@ -95,12 +95,16 @@ struct object	{
 		sq_pop(sqvm, 2);
 	}
 
-	void init( HSQUIRRELVM v, int idx, object *parent ) {
-		getParent(&parent->obj);
-		sq_pushinteger(sqvm, idx);
-		sq_get(sqvm, -2);
-		getObjFromStack(-1);
-		sq_pop(sqvm, 2);
+	void init( int idx, object *parent ) {
+		if(parent != nullptr)	{
+			getParent(&parent->obj);
+			sq_pushinteger(sqvm, idx);
+			sq_get(sqvm, -2);
+			getObjFromStack(-1);
+			sq_pop(sqvm, 2);
+		} else {
+			getObjFromStack(idx);
+		}
 	}
 
 	void getParent( HSQOBJECT *parent )	{
@@ -126,6 +130,10 @@ struct object	{
 
 	float asFloat()	{
 		return sq_objtofloat( &obj );
+	}
+
+	SQUserPointer asPointer()	{
+		return sq_objtouserpointer( &obj );
 	}
 
 	HSQOBJECT obj;
@@ -173,10 +181,8 @@ struct vm	{
 			sq_pushstring(sqvm,table,-1);
 			sq_get(sqvm, -2);
 		}
-		sq_pushstring(sqvm,fname,-1);
-		sq_newclosure(sqvm,func,0); //create a new function
-		sq_newslot(sqvm,-3,SQFalse);
-		sq_settop(sqvm, 0); //pops the root table
+		sq_registerfunction(sqvm, fname, func);
+		sq_poptop(sqvm);
 	}
 
 	int gettop()	{ return sq_gettop(sqvm); }
