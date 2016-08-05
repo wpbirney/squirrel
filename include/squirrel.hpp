@@ -14,6 +14,7 @@
 #include <cstdarg>
 #include <string>
 #include <iostream>
+#include <stdexcept>
 
 #ifdef SQUNICODE
 #define scvprintf vfwprintf
@@ -90,21 +91,34 @@ struct object	{
 	void init( std::string n, object *parent ) {
 		getParent(&parent->obj);
 		sq_pushstring(sqvm, n.c_str(), -1);
-		sq_get(sqvm, -2);
-		getObjFromStack(-1);
+		get(-2);
+		getStackObj(-1);
 		sq_pop(sqvm, 2);
 	}
 
 	void init( int idx, object *parent ) {
-		if(parent != nullptr)	{
-			getParent(&parent->obj);
-			sq_pushinteger(sqvm, idx);
-			sq_get(sqvm, -2);
-			getObjFromStack(-1);
-			sq_pop(sqvm, 2);
-		} else {
-			getObjFromStack(idx);
+		if(parent == nullptr)	{
+			getStackObj(idx);
+			return;
 		}
+		getParent(&parent->obj);
+		sq_pushinteger(sqvm, idx);
+		get(-2);
+		getStackObj(-1);
+		sq_pop(sqvm, 2);
+	}
+
+	//calls sq_get, pushes null on failure
+	void get(int idx)	{
+		if(SQ_FAILED(sq_get(sqvm, idx)))
+			sq_pushnull(sqvm);
+	}
+
+	int getType()	{
+		sq_pushobject(sqvm, obj);
+		int r = sq_gettype(sqvm, -1);
+		sq_poptop(sqvm);
+		return r;
 	}
 
 	void getParent( HSQOBJECT *parent )	{
@@ -114,14 +128,17 @@ struct object	{
 			sq_pushobject(sqvm, *parent);
 	}
 
-	void getObjFromStack( int idx )	{
+	void getStackObj( int idx )	{
 		sq_resetobject( &obj );
 		sq_getstackobj(sqvm, -1, &obj);
 		sq_addref( sqvm, &obj );
 	}
 
 	std::string asString()	{
-		return sq_objtostring( &obj );
+		if(getType() == OT_STRING)
+			return sq_objtostring( &obj );
+		else
+			return "null";
 	}
 
 	int asInt()	{
