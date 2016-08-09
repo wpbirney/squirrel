@@ -92,6 +92,14 @@ struct invalid_key : std::exception	{
 	std::string msg;
 };
 
+struct bad_script : std::exception	{
+	bad_script( std::string file )	: msg(file)	{}
+	virtual const char* what() const throw()	{
+		return msg.c_str();
+	}
+	std::string msg;
+};
+
 struct object	{
 	object( HSQUIRRELVM v, std::string n, object *root ) : sqvm(v), parent(root)	{
 		init(n);
@@ -233,11 +241,13 @@ struct vm	{
 		sq_settop(sqvm, 0);
 	}
 
-	SQRESULT runScript( std::string filename )	{
+	void runScript( std::string filename )	{
 		sq_pushroottable(sqvm);
 		SQRESULT r = sqstd_dofile(sqvm, _SC(filename.c_str()), false, true);
 		sq_poptop(sqvm);
-		return r;
+
+		if(SQ_FAILED(r))
+			throw bad_script(filename);
 	}
 
 	void registerFunction( const char* table, const char* fname, SQFUNCTION func )	{
