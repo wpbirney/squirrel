@@ -1,6 +1,12 @@
 #ifndef SQUIRREL_HPP
 #define SQUIRREL_HPP
 
+#include <cstdio>
+#include <cstdarg>
+#include <string>
+#include <iostream>
+#include <stdexcept>
+
 //include all the stdlib headers
 #include <squirrel.h>
 #include <sqstdblob.h>
@@ -9,12 +15,6 @@
 #include <sqstdmath.h>
 #include <sqstdstring.h>
 #include <sqstdaux.h>
-
-#include <cstdio>
-#include <cstdarg>
-#include <string>
-#include <iostream>
-#include <stdexcept>
 
 #ifdef SQUNICODE
 #define scvprintf vfwprintf
@@ -68,12 +68,12 @@ inline HSQUIRRELVM sqstd_open(SQInteger stacksize)	{
 namespace sq	{
 
 struct object	{
-	object( HSQUIRRELVM v, std::string n, object *parent ) : sqvm(v)	{
-		init(n, parent);
+	object( HSQUIRRELVM v, std::string n, object *root ) : sqvm(v), parent(root)	{
+		init(n);
 	}
 
-	object( HSQUIRRELVM v, int idx, object *parent ) : sqvm(v)	{
-		init(idx, parent);
+	object( HSQUIRRELVM v, int idx, object *root ) : sqvm(v), parent(root)	{
+		init(idx);
 	}
 
 	~object()	{
@@ -88,24 +88,28 @@ struct object	{
 		return object(sqvm, idx, this);
 	}
 
-	void init( std::string n, object *parent ) {
-		getParent(&parent->obj);
+	void init( std::string n ) {
+		getParent();
 		sq_pushstring(sqvm, n.c_str(), -1);
 		get(-2);
 		getStackObj(-1);
 		sq_pop(sqvm, 2);
 	}
 
-	void init( int idx, object *parent ) {
+	void init( int idx ) {
 		if(parent == nullptr)	{
 			getStackObj(idx);
 			return;
 		}
-		getParent(&parent->obj);
+		getParent();
 		sq_pushinteger(sqvm, idx);
 		get(-2);
 		getStackObj(-1);
 		sq_pop(sqvm, 2);
+	}
+
+	void push()	{
+		sq_pushobject( sqvm, obj );
 	}
 
 	//calls sq_get, pushes null on failure
@@ -115,17 +119,17 @@ struct object	{
 	}
 
 	int getType()	{
-		sq_pushobject(sqvm, obj);
+		push();
 		int r = sq_gettype(sqvm, -1);
 		sq_poptop(sqvm);
 		return r;
 	}
 
-	void getParent( HSQOBJECT *parent )	{
+	void getParent()	{
 		if(parent == nullptr)
 			sq_pushroottable(sqvm);
 		else
-			sq_pushobject(sqvm, *parent);
+			parent->push();
 	}
 
 	void getStackObj( int idx )	{
@@ -154,6 +158,7 @@ struct object	{
 	}
 
 	HSQOBJECT obj;
+	object *parent;
 	HSQUIRRELVM sqvm;
 };
 
