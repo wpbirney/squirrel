@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdarg>
 #include <string>
+#include <sstream>
 #include <iostream>
 #include <stdexcept>
 
@@ -67,6 +68,30 @@ inline HSQUIRRELVM sqstd_open(SQInteger stacksize)	{
 
 namespace sq	{
 
+struct invalid_type : std::exception	{
+	invalid_type( std::string who, std::string req )	{
+		std::stringstream ss;
+		ss << who << " is not a " << req;
+		msg = ss.str();
+	}
+	virtual const char* what() const throw() {
+		return msg.c_str();
+	}
+	std::string msg;
+};
+
+struct invalid_key : std::exception	{
+	invalid_key(std::string _table, std::string _key)	{
+		std::stringstream ss;
+		ss << _table << "[" << _key << "] does not exist";
+		msg = ss.str();
+	}
+	virtual const char* what() const throw()	{
+		return msg.c_str();
+	}
+	std::string msg;
+};
+
 struct object	{
 	object( HSQUIRRELVM v, std::string n, object *root ) : sqvm(v), parent(root)	{
 		init(n);
@@ -89,6 +114,7 @@ struct object	{
 	}
 
 	void init( std::string n ) {
+		name = n;
 		getParent();
 		sq_pushstring(sqvm, n.c_str(), -1);
 		get(-2);
@@ -97,6 +123,7 @@ struct object	{
 	}
 
 	void init( int idx ) {
+		name = std::to_string(idx);
 		if(parent == nullptr)	{
 			getStackObj(idx);
 			return;
@@ -112,10 +139,15 @@ struct object	{
 		sq_pushobject( sqvm, obj );
 	}
 
-	//calls sq_get, pushes null on failure
+	//calls sq_get, throws an exception if not succesful
 	void get(int idx)	{
-		if(SQ_FAILED(sq_get(sqvm, idx)))
-			sq_pushnull(sqvm);
+		if(SQ_FAILED(sq_get(sqvm, idx)))	{
+			sq_pop(sqvm, 1);
+			if( parent == nullptr )
+				throw invalid_key("root", name);
+			else
+				throw invalid_key(parent->name, name);
+		}
 	}
 
 	int getType()	{
@@ -142,24 +174,35 @@ struct object	{
 		if(getType() == OT_STRING)
 			return sq_objtostring( &obj );
 		else
-			return "null";
+			throw invalid_type(name, "string");
 	}
 
 	int asInt()	{
-		return sq_objtointeger( &obj );
+		if(getType() == OT_INTEGER)
+			return sq_objtointeger( &obj );
+		else
+			throw invalid_type(name, "integer");
 	}
 
 	float asFloat()	{
-		return sq_objtofloat( &obj );
+		if(getType() == OT_FLOAT)
+			return sq_objtofloat( &obj );
+		else
+			throw invalid_type(name ,"float");
 	}
 
 	SQUserPointer asPointer()	{
-		return sq_objtouserpointer( &obj );
+		if(getType() == OT_USERPOINTER)
+			return sq_objtouserpointer( &obj );
+		else
+			throw invalid_type(name, "userpointer");
 	}
 
 	HSQOBJECT obj;
 	object *parent;
 	HSQUIRRELVM sqvm;
+
+	std::string name;
 };
 
 struct vm	{
