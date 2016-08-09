@@ -17,54 +17,8 @@
 #include <sqstdstring.h>
 #include <sqstdaux.h>
 
-#ifdef SQUNICODE
-#define scvprintf vfwprintf
-#else
-#define scvprintf vfprintf
-#endif
-
-//default print function, writes to stdout
-inline void _printfunc(HSQUIRRELVM v,const SQChar *s,...)
-{
-	printf("[squirrel]: ");
-	va_list vl;
-	va_start(vl, s);
-	scvprintf(stdout, s, vl);
-	va_end(vl);
-	std::cout << std::endl;
-}
-
-//default error function, writes to stderr
-inline void _errorfunc(HSQUIRRELVM v,const SQChar *s,...)
-{
-	printf("[squirrel]: ");
-	va_list vl;
-	va_start(vl, s);
-	scvprintf(stderr, s, vl);
-	va_end(vl);
-}
-
-//register all the libs
-inline void sqstd_register_libs(HSQUIRRELVM v)	{
-	sq_pushroottable(v);
-	sqstd_register_bloblib(v);
-	sqstd_register_iolib(v);
-	sqstd_register_systemlib(v);
-	sqstd_register_mathlib(v);
-	sqstd_register_stringlib(v);
-	sq_pop(v, 1);
-}
-
 //opens a vm and reqisters the stdlibs
-inline HSQUIRRELVM sqstd_open(SQInteger stacksize)	{
-	HSQUIRRELVM v;
-	v = sq_open(1024);
-	sqstd_register_libs(v);
-	sqstd_seterrorhandlers(v); //sets default error handlers
-	sq_setprintfunc(v, _printfunc, _errorfunc);
-	sq_enabledebuginfo(v, SQTrue);
-	return v;
-}
+HSQUIRRELVM sqstd_open( SQInteger );
 
 namespace sq	{
 
@@ -121,90 +75,32 @@ struct object	{
 		return object(sqvm, idx, this);
 	}
 
-	void init( std::string n ) {
-		name = n;
-		getParent();
-		sq_pushstring(sqvm, n.c_str(), -1);
-		get(-2);
-		getStackObj(-1);
-		sq_pop(sqvm, 2);
-	}
+	//init functions, need to be templated
+	void init( std::string );
+	void init( int );
 
-	void init( int idx ) {
-		name = std::to_string(idx);
-		if(parent == nullptr)	{
-			getStackObj(idx);
-			return;
-		}
-		getParent();
-		sq_pushinteger(sqvm, idx);
-		get(-2);
-		getStackObj(-1);
-		sq_pop(sqvm, 2);
-	}
-
+	//push the object onto the stack
 	void push()	{
 		sq_pushobject( sqvm, obj );
 	}
 
 	//calls sq_get, throws an exception if not succesful
-	void get(int idx)	{
-		if(SQ_FAILED(sq_get(sqvm, idx)))	{
-			sq_pop(sqvm, 1);
-			if( parent == nullptr )
-				throw invalid_key("root", name);
-			else
-				throw invalid_key(parent->name, name);
-		}
-	}
+	void get( int );
 
-	int getType()	{
-		push();
-		int r = sq_gettype(sqvm, -1);
-		sq_poptop(sqvm);
-		return r;
-	}
+	//returns the OT_* type of the current object
+	int getType();
 
-	void getParent()	{
-		if(parent == nullptr)
-			sq_pushroottable(sqvm);
-		else
-			parent->push();
-	}
+	//pushes the parent onto the stack, if parent is null, then pushes the root-table
+	void getParent();
 
-	void getStackObj( int idx )	{
-		sq_resetobject( &obj );
-		sq_getstackobj(sqvm, -1, &obj);
-		sq_addref( sqvm, &obj );
-	}
+	//sets the current object to the one at stack posistion specified
+	void getStackObj( int );
 
-	std::string asString()	{
-		if(getType() == OT_STRING)
-			return sq_objtostring( &obj );
-		else
-			throw invalid_type(name, "string");
-	}
-
-	int asInt()	{
-		if(getType() == OT_INTEGER)
-			return sq_objtointeger( &obj );
-		else
-			throw invalid_type(name, "integer");
-	}
-
-	float asFloat()	{
-		if(getType() == OT_FLOAT)
-			return sq_objtofloat( &obj );
-		else
-			throw invalid_type(name ,"float");
-	}
-
-	SQUserPointer asPointer()	{
-		if(getType() == OT_USERPOINTER)
-			return sq_objtouserpointer( &obj );
-		else
-			throw invalid_type(name, "userpointer");
-	}
+	//as* functions
+	std::string asString();
+	int asInt();
+	float asFloat();
+	SQUserPointer asPointer();
 
 	HSQOBJECT obj;
 	object *parent;
