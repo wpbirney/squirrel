@@ -121,40 +121,13 @@ struct vm	{
 		return object(sqvm, _idx, nullptr);
 	}
 
-	void open( int stacksize )	{
-		sqvm = sqstd_open( stacksize );
-	}
+	void open( int stacksize )	{ sqvm = sqstd_open( stacksize ); }
 
-	void close()	{
-		sq_close(sqvm);
-	}
+	void close()	{ sq_close(sqvm); }
 
-	void newTable( std::string name )	{
-		sq_pushroottable(sqvm);
-		sq_pushstring(sqvm, name.c_str(), -1);
-		sq_newtable(sqvm);
-		sq_newslot(sqvm, -3, false);
-		sq_settop(sqvm, 0);
-	}
-
-	void runScript( std::string filename )	{
-		sq_pushroottable(sqvm);
-		SQRESULT r = sqstd_dofile(sqvm, _SC(filename.c_str()), false, true);
-		sq_poptop(sqvm);
-
-		if(SQ_FAILED(r))
-			throw bad_script(filename);
-	}
-
-	void registerFunction( const char* table, const char* fname, SQFUNCTION func )	{
-		sq_pushroottable(sqvm);
-		if( table != nullptr )	{
-			sq_pushstring(sqvm,table,-1);
-			sq_get(sqvm, -2);
-		}
-		sq_registerfunction(sqvm, fname, func);
-		sq_poptop(sqvm);
-	}
+	void newTable( std::string name );
+	void runScript( std::string filename );
+	void registerFunction( const char* table, const char* fname, SQFUNCTION func );
 
 	int gettop()	{ return sq_gettop(sqvm); }
 
