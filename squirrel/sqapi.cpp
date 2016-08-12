@@ -395,6 +395,7 @@ void sq_newclosure(HSQUIRRELVM v,SQFUNCTION func,SQUnsignedInteger nfreevars)
 }
 
 SQRESULT sq_registerfunction(HSQUIRRELVM v, const SQChar* name, SQFUNCTION func)	{
+	sq_pushroottable(v);
 	sq_pushstring(v, name, -1);
 	sq_newclosure(v, func, 0); //create a new function
 	return sq_newslot(v, -3, SQFalse);
