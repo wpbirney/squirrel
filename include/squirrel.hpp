@@ -54,18 +54,34 @@ struct bad_script : std::exception	{
 	std::string msg;
 };
 
+struct bad_call : std::exception	{
+	bad_call( std::string m )	{
+		msg = "a bad call was made: " + m;
+	}
+
+	virtual const char* what() const throw()	{
+		return msg.c_str();
+	}
+	std::string msg;
+};
+
 struct object	{
 	object( HSQUIRRELVM v, std::string n, object *root ) : sqvm(v), parent(root)	{
-		init(n);
+		name = n;
+		indexed = false;
+		stack = false;
+		init();
 	}
 
-	object( HSQUIRRELVM v, int idx, object *root ) : sqvm(v), parent(root)	{
-		init(idx);
+	object( HSQUIRRELVM v, int idx, object *root, bool onStack=true ) : sqvm(v), parent(root)	{
+		name = std::to_string(idx);
+		index = idx;
+		indexed = true;
+		stack = onStack;
+		init();
 	}
 
-	~object()	{
-		sq_release(sqvm, &obj);
-	}
+	~object()	{ sq_release(sqvm, &obj); }
 
 	object operator[] (const std::string field)	{
 		return object(sqvm, field, this);
@@ -75,39 +91,104 @@ struct object	{
 		return object(sqvm, idx, this);
 	}
 
-	//init functions, need to be templated
-	void init( std::string );
-	void init( int );
+	void init()	{
+		if( stack )	{
+			getStackObj(index);
+		} else {
+			int parentspushed = sq_gettop(sqvm);
+			getParent();
+			parentspushed = sq_gettop(sqvm) - parentspushed;
+
+			if(indexed)
+				sq_pushinteger(sqvm, index);
+			else
+				sq_pushstring(sqvm, name.c_str(), -1);
+			get(-2);
+			getStackObj(-1);
+			sq_pop(sqvm, parentspushed);
+		}
+	}
+
+	void get(int idx)	{
+		if(SQ_FAILED(sq_get(sqvm, idx)))	{
+			if(parent == nullptr)
+				throw invalid_key("root", name);
+			else
+				throw invalid_key(parent->name, name);
+		}
+	}
+
+	void getStackObj(int idx)	{
+		sq_resetobject(&obj);
+		sq_getstackobj(sqvm, idx, &obj);
+		sq_addref(sqvm, &obj);
+	}
+
+	void getParent()	{
+		//if the parent is null we push the root table, else we push the parent
+		if(parent == nullptr)
+			sq_pushroottable(sqvm);
+		else
+			parent->push();
+	}
 
 	//push the object onto the stack
 	void push()	{
-		sq_pushobject( sqvm, obj );
+		sq_pushobject(sqvm, obj);
 	}
 
-	//calls sq_get, throws an exception if not succesful
-	void get( int );
+	int getType()	{
+		push();
+		int i = sq_gettype(sqvm, -1);
+		sq_pop(sqvm,1);
+		return i;
+	}
 
-	//returns the OT_* type of the current object
-	int getType();
+	template<typename t>
+	t to();
 
-	//pushes the parent onto the stack, if parent is null, then pushes the root-table
-	void getParent();
+	template<typename t>
+	void setfield(std::string field, t val);
 
-	//sets the current object to the one at stack posistion specified
-	void getStackObj( int );
-
-	//as* functions
-	std::string asString();
-	int asInt();
-	float asFloat();
-	SQUserPointer asPointer();
-
-	HSQOBJECT obj;
 	object *parent;
 	HSQUIRRELVM sqvm;
+	HSQOBJECT obj;
 
 	std::string name;
+	int index;
+	bool indexed;
+	bool stack;
 };
+
+template<>
+inline std::string object::to()	{
+	if(getType() != OT_STRING)
+		throw invalid_type(name, "string");
+	return sq_objtostring(&obj);
+}
+
+template<>
+inline int object::to()	{
+	if(getType() != OT_INTEGER)
+		throw invalid_type(name, "integer");
+	return sq_objtointeger(&obj);
+}
+
+template<>
+inline float object::to()	{
+	if(getType() != OT_FLOAT)
+		throw invalid_type(name, "float");
+	return sq_objtofloat(&obj);
+}
+
+template<>
+inline void object::setfield( std::string field, std::string val )	{
+	push();
+	sq_pushstring(sqvm, field.c_str(), -1);
+	sq_pushstring(sqvm, val.c_str(), -1);
+	sq_newslot(sqvm, -3, false);
+	sq_pop(sqvm, 1);
+}
 
 struct vm	{
 	vm()	{}
